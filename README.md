@@ -1,3 +1,7 @@
+## Comando para executar
+Navegue para a pasta `src` e execute o comando:
+`g++ -std=c++17 main.cpp -o main -lboost_system -lpthread`
+
 # Sistema Assíncrono de Aquisição de Dados
 
 ## Descrição do Projeto
