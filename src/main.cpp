@@ -9,6 +9,7 @@
 #include <fstream>
 #include <mutex>
 #include <map>
+#include <unordered_map>
 
 using boost::asio::ip::tcp;
 
@@ -16,7 +17,7 @@ std::unordered_map<std::string, std::fstream> sensorFiles;
 
 std::fstream &get_sensor_file(const std::string &sensor_id)
 {
-  const std::string filename = "../log/log_" + sensor_id + ".bin";
+  const std::string filename = "../log_files/log_" + sensor_id + ".bin";
 
   auto &file = sensorFiles[sensor_id];
   if (!file.is_open())
@@ -42,7 +43,7 @@ void open_log_file_for_sensor(const std::string &sensor_id)
   auto &logFile = logFiles[sensor_id];
   if (!logFile.is_open())
   {
-    std::string filename = "../log/log_" + sensor_id + ".bin";
+    std::string filename = "../log_files/log_" + sensor_id + ".bin";
     logFile.open(filename, std::ios::in | std::ios::out | std::ios::binary | std::ios::app);
     if (!logFile.is_open())
     {
@@ -143,35 +144,42 @@ private:
 
                                         std::fstream &logFile = get_sensor_file(sensor_id);
 
-                                        std::string response = "";
-                                        int count = 0;
-                                        LogRecord logRecordAux;
-
+                                        logFile.clear(); // Limpar flags de erro
                                         logFile.seekg(0, std::ios::end);
                                         std::streampos fileSize = logFile.tellg();
 
                                         int totalRecords = fileSize / sizeof(LogRecord);
-
                                         int recordsToRead = std::min(quantity, totalRecords);
-                                        std::streampos readPosition = fileSize - (recordsToRead * sizeof(LogRecord));
 
-                                        logFile.seekg(readPosition);
-
-                                        while (logFile.read(reinterpret_cast<char *>(&logRecordAux), sizeof(LogRecord)) && count < quantity)
+                                        if (recordsToRead > 0)
                                         {
-                                          response = time_t_to_string(logRecordAux.timestamp) + "|" + std::to_string(logRecordAux.value) + ";" + response;
-                                          count++;
-                                        }
+                                          std::streampos readPosition = fileSize - static_cast<std::streamoff>(recordsToRead * static_cast<std::streamoff>(sizeof(LogRecord)));
+                                          logFile.seekg(readPosition);
 
-                                        if (count == 0)
-                                        {
-                                          response = "ERROR|INVALID_SENSOR_ID\r\n";
+                                          std::string response = "";
+                                          int count = 0;
+                                          LogRecord logRecordAux;
+
+                                          while (logFile.read(reinterpret_cast<char *>(&logRecordAux), sizeof(LogRecord)) && count < quantity)
+                                          {
+                                            response = time_t_to_string(logRecordAux.timestamp) + "|" + std::to_string(logRecordAux.value) + ";" + response;
+                                            count++;
+                                          }
+
+                                          if (count == 0)
+                                          {
+                                            response = "ERROR|INVALID_SENSOR_ID\r\n";
+                                          }
+                                          else
+                                          {
+                                            response = std::to_string(count) + ";" + response + "\r\n";
+                                          }
+                                          write_message(response);
                                         }
                                         else
                                         {
-                                          response = std::to_string(count) + ";" + response + "\r\n";
+                                          write_message("ERROR|NO_RECORDS\r\n");
                                         }
-                                        write_message(response);
                                       }
                                       std::cout << "Received: " << message << std::endl;
                                       write_message(message);
